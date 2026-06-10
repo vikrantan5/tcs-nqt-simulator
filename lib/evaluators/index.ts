@@ -1,10 +1,10 @@
 import "server-only";
 import { groqJSON } from "../groq/client";
 
-// Re-export client-safe util so existing server callers can still use
-// `@/lib/evaluators` for it. Client components should import from
-// "@/lib/evaluators/fill-blank" directly to avoid pulling in groq.
-export { evaluateFillBlank } from "./fill-blank";
+// NOTE: The client-safe `evaluateFillBlank` lives in "./fill-blank".
+// Do NOT re-export it from this barrel — this file is server-only,
+// and any client component that imports from "@/lib/evaluators" would
+// transitively pull in the Groq SDK and break the client build.
 
 export interface PassageEvaluation {
   score: number;

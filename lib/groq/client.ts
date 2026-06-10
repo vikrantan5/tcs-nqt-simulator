@@ -1,4 +1,4 @@
-"import "server-only";
+import "server-only";
 import Groq from "groq-sdk";
 
 export const GROQ_MODEL = "llama-3.3-70b-versatile";
@@ -41,4 +41,3 @@ export async function groqJSON<T = any>(
   const content = completion.choices[0]?.message?.content ?? "{}";
   return JSON.parse(content) as T;
 }
-"
