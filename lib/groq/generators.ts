@@ -1,3 +1,4 @@
+import "server-only";
 import { groqJSON } from "./client";
 
 export interface FillBlankQuestion {

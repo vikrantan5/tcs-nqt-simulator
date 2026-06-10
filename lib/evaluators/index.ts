@@ -1,4 +1,10 @@
+import "server-only";
 import { groqJSON } from "../groq/client";
+
+// Re-export client-safe util so existing server callers can still use
+// `@/lib/evaluators` for it. Client components should import from
+// "@/lib/evaluators/fill-blank" directly to avoid pulling in groq.
+export { evaluateFillBlank } from "./fill-blank";
 
 export interface PassageEvaluation {
   score: number;
@@ -80,14 +86,4 @@ Compute weighted "score" 0-100 integer.
 Return JSON: { "score": int, "professionalism": int, "grammar": int, "clarity": int, "structure": int, "communication": int, "strengths": [strings], "weaknesses": [strings], "suggestions": [strings], "ideal_email": "an example ideal email response (subject + body)" }`;
 
   return await groqJSON<EmailEvaluation>(sys, user, 0.3);
-}
-
-export function evaluateFillBlank(userAnswer: string, correctAnswer: string): boolean {
-  const u = (userAnswer || "").trim().toLowerCase();
-  const c = (correctAnswer || "").trim().toLowerCase();
-  if (!u || !c) return false;
-  if (u === c) return true;
-  // tolerate simple plural / -s / -ing differences
-  if (u.replace(/s$/, "") === c.replace(/s$/, "")) return true;
-  return false;
 }
