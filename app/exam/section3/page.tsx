@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useExamStore, type EmailQ } from "@/store/exam-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,9 +14,23 @@ import { toast } from "sonner";
 const EMAIL_SECONDS = 540;
 const MIN_WORDS = 100;
 
-export default function Section3Page() {
+function Section3Inner() {
   const router = useRouter();
-  const { setEmailQ, setEmailAnswer, attemptId, fillBlankAnswers, passageAnswers, warnings, passageQs, reset } = useExamStore();
+  const searchParams = useSearchParams();
+  const isSolo = searchParams.get("mode") === "solo";
+
+  const {
+    setEmailQ,
+    setEmailAnswer,
+    setAttemptId,
+    setTestType,
+    attemptId,
+    fillBlankAnswers,
+    passageAnswers,
+    warnings,
+    passageQs,
+    reset,
+  } = useExamStore();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -29,6 +43,20 @@ export default function Section3Page() {
     let cancelled = false;
     async function init() {
       try {
+        if (isSolo) {
+          reset();
+          setTestType("email_writing");
+          const a = await fetch("/api/attempts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ test_type: "email_writing" }),
+          });
+          if (!a.ok) throw new Error("Failed to create attempt");
+          const aj = await a.json();
+          if (cancelled) return;
+          setAttemptId(aj.attempt.id);
+        }
+
         const r = await fetch("/api/questions/email");
         if (!r.ok) throw new Error("Failed to load scenario");
         const j = await r.json();
@@ -89,19 +117,20 @@ export default function Section3Page() {
 
     setEmailAnswer({ text: emailText, score: evaluation.score || 0, evaluation });
 
-    // finalize attempt
     if (attemptId) {
       try {
         await fetch(`/api/attempts/${attemptId}/complete`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            fill_blank_answers: fillBlankAnswers,
-            passage_answers: passageAnswers.map((p, i) => ({
-              ...p,
-              passage: passageQs[i]?.passage,
-              key_points: passageQs[i]?.key_points,
-            })),
+            fill_blank_answers: isSolo ? [] : fillBlankAnswers,
+            passage_answers: isSolo
+              ? []
+              : passageAnswers.map((p, i) => ({
+                  ...p,
+                  passage: passageQs[i]?.passage,
+                  key_points: passageQs[i]?.key_points,
+                })),
             email_answer: {
               scenario,
               text: emailText,
@@ -135,7 +164,9 @@ export default function Section3Page() {
       <header className="border-b border-border bg-card/40 backdrop-blur">
         <div className="container py-4 flex items-center justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Section 3 / 3</div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              {isSolo ? "Practice · Email Writing" : "Section 3 / 3"}
+            </div>
             <div className="font-display text-lg font-semibold flex items-center gap-2"><Mail className="h-4 w-4 text-primary" /> Email Writing</div>
           </div>
           <div className="flex items-center gap-6">
@@ -179,18 +210,30 @@ export default function Section3Page() {
               value={emailText}
               onChange={(e) => setEmailText(e.target.value)}
               className="mt-4 min-h-[420px] font-mono"
-              placeholder={"Subject: ...\n\nDear ...,\n\nWrite your professional response here..."}
+              placeholder={"Subject: ...
+
+Dear ...,
+
+Write your professional response here..."}
               data-testid="email-textarea"
             />
             <div className="flex items-center justify-between mt-4">
               <span className="text-xs text-muted-foreground">Auto-submits when timer ends</span>
               <Button onClick={() => handleSubmit(false)} disabled={submitting} data-testid="submit-email-button">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit & Finish Exam"}
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isSolo ? "Submit & Finish Test" : "Submit & Finish Exam"}
               </Button>
             </div>
           </CardContent>
         </Card>
       </main>
     </div>
+  );
+}
+
+export default function Section3Page() {
+  return (
+    <Suspense fallback={null}>
+      <Section3Inner />
+    </Suspense>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useExamStore, type PassageQ } from "@/store/exam-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,27 +16,58 @@ const WRITE_SECONDS = 90;
 
 type Phase = "read" | "write";
 
-export default function Section2Page() {
+function Section2Inner() {
   const router = useRouter();
-  const { setPassageQs, passageQs, addPassageAnswer, addWarning } = useExamStore();
+  const searchParams = useSearchParams();
+  const isSolo = searchParams.get("mode") === "solo";
+
+  const {
+    setPassageQs,
+    passageQs,
+    addPassageAnswer,
+    addWarning,
+    setAttemptId,
+    setTestType,
+    attemptId,
+    passageAnswers,
+    warnings,
+    reset,
+  } = useExamStore();
 
   const [loading, setLoading] = useState(true);
+  const [finishing, setFinishing] = useState(false);
   const [passages, setPassages] = useState<PassageQ[]>([]);
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<Phase>("read");
   const [timeLeft, setTimeLeft] = useState(READ_SECONDS);
   const [recall, setRecall] = useState("");
   const tickRef = useRef<NodeJS.Timeout | null>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     async function init() {
       try {
-        if (passageQs && passageQs.length === 4) {
+        if (isSolo) {
+          // Solo mode: start a fresh attempt for passage-recall
+          reset();
+          setTestType("passage_recall");
+          const a = await fetch("/api/attempts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ test_type: "passage_recall" }),
+          });
+          if (!a.ok) throw new Error("Failed to create attempt");
+          const aj = await a.json();
+          if (cancelled) return;
+          setAttemptId(aj.attempt.id);
+        } else if (passageQs && passageQs.length === 4) {
+          // Continuing the full mock — passages already cached.
           setPassages(passageQs);
           setLoading(false);
           return;
         }
+
         const r = await fetch("/api/questions/passage");
         if (!r.ok) throw new Error("Failed to load passages");
         const j = await r.json();
@@ -49,7 +80,9 @@ export default function Section2Page() {
       }
     }
     init();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -87,14 +120,40 @@ export default function Section2Page() {
       setPhase("write");
       return;
     }
-    // Write phase ended -> evaluate
     await submitRecall();
   }
 
+  async function finalizeSolo(allAnswers: typeof passageAnswers, allPassages: PassageQ[]) {
+    if (!attemptId) return;
+    setFinishing(true);
+    try {
+      await fetch(`/api/attempts/${attemptId}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fill_blank_answers: [],
+          passage_answers: allAnswers.map((p, i) => ({
+            ...p,
+            passage: allPassages[i]?.passage,
+            key_points: allPassages[i]?.key_points,
+          })),
+          email_answer: null,
+          warnings,
+        }),
+      });
+    } catch {}
+    router.push(`/results/${attemptId}`);
+    setTimeout(() => reset(), 1500);
+  }
+
   async function submitRecall() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const p = passages[idx];
-    if (!p) return;
+    if (!p) { submittingRef.current = false; return; }
     setLoading(true);
+    let evaluation: any = { score: 0 };
     try {
       const r = await fetch("/api/evaluate/passage", {
         method: "POST",
@@ -102,24 +161,32 @@ export default function Section2Page() {
         body: JSON.stringify({ passage: p.passage, key_points: p.key_points, recall }),
       });
       const j = await r.json();
-      const evaluation = j.evaluation || { score: 0 };
-      addPassageAnswer({
-        passage_index: idx,
-        recall,
-        score: evaluation.score || 0,
-        evaluation,
-      });
+      evaluation = j.evaluation || { score: 0 };
     } catch {
-      addPassageAnswer({ passage_index: idx, recall, score: 0, evaluation: null });
+      evaluation = { score: 0 };
     }
+
+    const newAnswer = {
+      passage_index: idx,
+      recall,
+      score: evaluation.score || 0,
+      evaluation,
+    };
+    addPassageAnswer(newAnswer);
     setRecall("");
+
     if (idx + 1 >= passages.length) {
-      router.push("/exam/section3");
-    } else {
-      setIdx((i) => i + 1);
-      setPhase("read");
-      setLoading(false);
+      if (isSolo) {
+        await finalizeSolo([...passageAnswers, newAnswer], passages);
+      } else {
+        router.push("/exam/section3");
+      }
+      return;
     }
+    setIdx((i) => i + 1);
+    setPhase("read");
+    setLoading(false);
+    setTimeout(() => { submittingRef.current = false; }, 50);
   }
 
   if (loading && !passages.length) {
@@ -127,6 +194,15 @@ export default function Section2Page() {
       <div className="min-h-screen flex flex-col items-center justify-center exam-no-select">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="mt-4 text-sm text-muted-foreground">Preparing passages...</p>
+      </div>
+    );
+  }
+
+  if (finishing) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center exam-no-select">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="mt-4 text-sm text-muted-foreground">Finalizing your test...</p>
       </div>
     );
   }
@@ -142,7 +218,9 @@ export default function Section2Page() {
       <header className="border-b border-border bg-card/40 backdrop-blur">
         <div className="container py-4 flex items-center justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Section 2 / 3</div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              {isSolo ? "Practice · Passage Recall" : "Section 2 / 3"}
+            </div>
             <div className="font-display text-lg font-semibold flex items-center gap-2"><PhaseIcon className="h-4 w-4 text-primary" /> Passage Recall · {phaseLabel}</div>
           </div>
           <div className="flex items-center gap-6">
@@ -180,7 +258,7 @@ export default function Section2Page() {
               <div className="flex items-center justify-between mt-4">
                 <span className="text-xs text-muted-foreground">{countWords(recall)} words</span>
                 <Button onClick={submitRecall} data-testid="submit-recall-button">
-                  {idx + 1 === passages.length ? "Finish Section" : "Next Passage"}
+                  {idx + 1 === passages.length ? (isSolo ? "Finish Test" : "Finish Section") : "Next Passage"}
                 </Button>
               </div>
             </CardContent>
@@ -188,5 +266,13 @@ export default function Section2Page() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function Section2Page() {
+  return (
+    <Suspense fallback={null}>
+      <Section2Inner />
+    </Suspense>
   );
 }

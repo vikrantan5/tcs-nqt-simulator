@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Finalize attempt: receives full results, persists answers + final scores
+// Finalize attempt: receives full results, persists answers + final scores.
+// Handles full mock as well as solo single-section attempts.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
@@ -13,6 +14,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const body = await req.json();
   const { fill_blank_answers = [], passage_answers = [], email_answer, warnings = 0 } = body;
+
+  // Look up the existing attempt to know its test_type
+  const { data: existing } = await supabase
+    .from("attempts")
+    .select("test_type")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+  const testType: string = existing?.test_type || "full";
 
   // Fill blank score: % correct
   const fbCorrect = fill_blank_answers.filter((a: any) => a.is_correct).length;
@@ -26,8 +36,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // Email score
   const emScore = email_answer?.score ?? 0;
 
-  // Weighted total: FB 33%, PS 34%, EM 33%
-  const total = Math.round(fbScore * 0.33 + psScore * 0.34 + emScore * 0.33);
+  // Total depends on test type. For solo tests, total = that section's score.
+  let total = 0;
+  if (testType === "fill_blank") total = fbScore;
+  else if (testType === "passage_recall") total = psScore;
+  else if (testType === "email_writing") total = emScore;
+  else total = Math.round(fbScore * 0.33 + psScore * 0.34 + emScore * 0.33);
 
   // Insert answers
   if (fill_blank_answers.length) {
