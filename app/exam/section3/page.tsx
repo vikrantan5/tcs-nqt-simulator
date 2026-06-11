@@ -210,11 +210,7 @@ function Section3Inner() {
               value={emailText}
               onChange={(e) => setEmailText(e.target.value)}
               className="mt-4 min-h-[420px] font-mono"
-              placeholder={"Subject: ...
-
-Dear ...,
-
-Write your professional response here..."}
+              placeholder={"Subject: ...Dear ...,Write your professional response here..."}
               data-testid="email-textarea"
             />
             <div className="flex items-center justify-between mt-4">
