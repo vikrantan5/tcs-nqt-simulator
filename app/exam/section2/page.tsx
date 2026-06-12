@@ -48,6 +48,7 @@ function Section2Inner() {
     let cancelled = false;
     async function init() {
       try {
+        let currentAttemptId: string | null = attemptId;
         if (isSolo) {
           // Solo mode: start a fresh attempt for passage-recall
           reset();
@@ -61,6 +62,7 @@ function Section2Inner() {
           const aj = await a.json();
           if (cancelled) return;
           setAttemptId(aj.attempt.id);
+          currentAttemptId = aj.attempt.id;
         } else if (passageQs && passageQs.length === 4) {
           // Continuing the full mock — passages already cached.
           setPassages(passageQs);
@@ -68,7 +70,10 @@ function Section2Inner() {
           return;
         }
 
-        const r = await fetch("/api/questions/passage");
+        const passageUrl = currentAttemptId
+          ? `/api/questions/passage?attemptId=${currentAttemptId}`
+          : "/api/questions/passage";
+        const r = await fetch(passageUrl);
         if (!r.ok) throw new Error("Failed to load passages");
         const j = await r.json();
         if (cancelled) return;
@@ -167,6 +172,7 @@ function Section2Inner() {
     }
 
     const newAnswer = {
+        passage_id: p.id,
       passage_index: idx,
       recall,
       score: evaluation.score || 0,

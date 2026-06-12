@@ -23,15 +23,28 @@ export const groq = new Proxy({} as Groq, {
   },
 });
 
+export interface GroqJSONOpts {
+  temperature?: number;
+  top_p?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  max_tokens?: number;
+}
+
 export async function groqJSON<T = any>(
   systemPrompt: string,
   userPrompt: string,
-  temperature = 0.7
+  opts: GroqJSONOpts | number = {}
 ): Promise<T> {
   const client = getGroq();
+  const o: GroqJSONOpts = typeof opts === "number" ? { temperature: opts } : opts;
   const completion = await client.chat.completions.create({
     model: GROQ_MODEL,
-    temperature,
+    temperature: o.temperature ?? 1.2,
+    top_p: o.top_p ?? 0.95,
+    frequency_penalty: o.frequency_penalty ?? 0.7,
+    presence_penalty: o.presence_penalty ?? 0.8,
+    max_tokens: o.max_tokens,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: systemPrompt },

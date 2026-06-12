@@ -48,6 +48,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const rows = fill_blank_answers.map((a: any, i: number) => ({
       attempt_id: id,
       question_index: i,
+      question_id: a.question_id || null,
       question: a.question,
       correct_answer: a.correct,
       user_answer: a.user,
@@ -61,6 +62,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const rows = passage_answers.map((p: any, i: number) => ({
       attempt_id: id,
       passage_index: i,
+      passage_id: p.passage_id || null,
       passage: p.passage,
       key_points: p.key_points,
       recall_text: p.recall,
@@ -72,6 +74,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (email_answer) {
     await supabase.from("email_answers").insert({
       attempt_id: id,
+      scenario_id: email_answer.scenario_id || email_answer.scenario?.id || null,
       scenario: email_answer.scenario,
       email_text: email_answer.text,
       word_count: email_answer.word_count,
@@ -79,7 +82,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       score: email_answer.score,
     });
   }
-
   const { data: updated, error } = await supabase
     .from("attempts")
     .update({

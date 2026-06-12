@@ -57,8 +57,9 @@ function Section1Inner() {
         const aj = await a.json();
         if (cancelled) return;
         setAttemptId(aj.attempt.id);
+          const r = await fetch(`/api/questions/fill-blank?attemptId=${aj.attempt.id}`);
 
-        const r = await fetch("/api/questions/fill-blank");
+       
         if (!r.ok) throw new Error("Failed to load questions");
         const j = await r.json();
         if (cancelled) return;
@@ -144,6 +145,7 @@ function Section1Inner() {
     if (!q) { submittingRef.current = false; return; }
     const is_correct = evaluateFillBlank(answer, q.answer, q.accepted_answers || []);
     const newAnswer = {
+      question_id: q.id,
       question: q.question,
       correct: q.answer,
       accepted_answers: q.accepted_answers || [],

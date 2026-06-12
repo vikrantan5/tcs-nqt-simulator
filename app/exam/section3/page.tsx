@@ -55,9 +55,12 @@ function Section3Inner() {
           const aj = await a.json();
           if (cancelled) return;
           setAttemptId(aj.attempt.id);
+          var currentAttemptId: string | null = aj.attempt.id;
+        } else {
+          var currentAttemptId: string | null = attemptId;
         }
 
-        const r = await fetch("/api/questions/email");
+        const r = await fetch(currentAttemptId ? `/api/questions/email?attemptId=${currentAttemptId}` : "/api/questions/email");
         if (!r.ok) throw new Error("Failed to load scenario");
         const j = await r.json();
         if (cancelled) return;
@@ -115,8 +118,7 @@ function Section3Inner() {
       evaluation = j.evaluation || evaluation;
     } catch {}
 
-    setEmailAnswer({ text: emailText, score: evaluation.score || 0, evaluation });
-
+      setEmailAnswer({ scenario_id: scenario?.id, text: emailText, score: evaluation.score || 0, evaluation });
     if (attemptId) {
       try {
         await fetch(`/api/attempts/${attemptId}/complete`, {
@@ -210,7 +212,7 @@ function Section3Inner() {
               value={emailText}
               onChange={(e) => setEmailText(e.target.value)}
               className="mt-4 min-h-[420px] font-mono"
-              placeholder={"Subject: ... \n Dear ..., \n Write your professional response here..."}
+              placeholder={"Subject: ... n Dear ..., n Write your professional response here..."}
               data-testid="email-textarea"
             />
             <div className="flex items-center justify-between mt-4">

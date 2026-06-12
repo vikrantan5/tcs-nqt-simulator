@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 export type TestType = "full" | "fill_blank" | "passage_recall" | "email_writing";
 
 export interface FillBlankQ {
+  id?: string;
   question: string;
   answer: string;
   accepted_answers?: string[];
@@ -12,16 +13,21 @@ export interface FillBlankQ {
 }
 
 export interface PassageQ {
+  id?: string;
   passage: string;
   topic: string;
   key_points: string[];
+  difficulty?: string;
 }
 
 export interface EmailQ {
+  id?: string;
   situation: string;
   task: string;
   requirements: string[];
   recipient_role: string;
+  topic?: string;
+  difficulty?: string;
 }
 
 interface ExamState {
@@ -29,6 +35,7 @@ interface ExamState {
   testType: TestType;
   fillBlankQs: FillBlankQ[];
   fillBlankAnswers: {
+    question_id?: string;
     question: string;
     correct: string;
     accepted_answers?: string[];
@@ -38,9 +45,9 @@ interface ExamState {
     difficulty: string;
   }[];
   passageQs: PassageQ[];
-  passageAnswers: { passage_index: number; recall: string; score: number; evaluation: any }[];
+  passageAnswers: { passage_id?: string; passage_index: number; recall: string; score: number; evaluation: any }[];
   emailQ: EmailQ | null;
-  emailAnswer: { text: string; score: number; evaluation: any } | null;
+  emailAnswer: { scenario_id?: string; text: string; score: number; evaluation: any } | null;
   warnings: number;
   setAttemptId: (id: string) => void;
   setTestType: (t: TestType) => void;
@@ -49,7 +56,7 @@ interface ExamState {
   setPassageQs: (qs: PassageQ[]) => void;
   addPassageAnswer: (a: ExamState["passageAnswers"][number]) => void;
   setEmailQ: (q: EmailQ) => void;
-  setEmailAnswer: (a: { text: string; score: number; evaluation: any }) => void;
+  setEmailAnswer: (a: ExamState["emailAnswer"]) => void;
   addWarning: () => void;
   reset: () => void;
 }
@@ -91,4 +98,3 @@ export const useExamStore = create<ExamState>()(
     { name: "tcs-nqt-exam" }
   )
 );
-  
