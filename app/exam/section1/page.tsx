@@ -57,8 +57,7 @@ function Section1Inner() {
         const aj = await a.json();
         if (cancelled) return;
         setAttemptId(aj.attempt.id);
-          const r = await fetch(`/api/questions/fill-blank?attemptId=${aj.attempt.id}`);
-
+        const r = await fetch(`/api/questions/fill-blank?attemptId=${aj.attempt.id}`);
        
         if (!r.ok) throw new Error("Failed to load questions");
         const j = await r.json();
@@ -137,19 +136,26 @@ function Section1Inner() {
     setTimeout(() => reset(), 1500);
   }
 
-  function submit(auto = false) {
+  async function submit(auto = false) {
     if (submittingRef.current) return;
     submittingRef.current = true;
 
     const q = questions[idx];
-    if (!q) { submittingRef.current = false; return; }
-    const is_correct = evaluateFillBlank(answer, q.answer, q.accepted_answers || []);
+    if (!q) { 
+      submittingRef.current = false; 
+      return; 
+    }
+    
+    // Normalize answer: trim whitespace and replace multiple spaces with single space
+    const normalizedAnswer = answer.trim().replace(/\s+/g, " ");
+    const is_correct = evaluateFillBlank(normalizedAnswer, q.answer, q.accepted_answers || []);
+    
     const newAnswer = {
       question_id: q.id,
       question: q.question,
       correct: q.answer,
       accepted_answers: q.accepted_answers || [],
-      user: answer,
+      user: normalizedAnswer,
       is_correct,
       category: q.category,
       difficulty: q.difficulty,
@@ -159,10 +165,11 @@ function Section1Inner() {
 
     if (idx + 1 >= questions.length) {
       if (isSolo) {
-        finalizeSolo([...fillBlankAnswers, newAnswer]);
+        await finalizeSolo([...fillBlankAnswers, newAnswer]);
       } else {
         router.push("/exam/section2");
       }
+      submittingRef.current = false;
       return;
     }
     setIdx((i) => i + 1);
@@ -189,7 +196,7 @@ function Section1Inner() {
   }
 
   const q = questions[idx];
-  const progress = ((idx) / questions.length) * 100;
+  const progress = (idx / questions.length) * 100;
 
   return (
     <div className="min-h-screen bg-grid exam-no-select">
@@ -202,10 +209,14 @@ function Section1Inner() {
             <div className="font-display text-lg font-semibold">Fill in the Blanks</div>
           </div>
           <div className="flex items-center gap-6">
-            <div className="text-sm text-muted-foreground"><span className="text-foreground font-semibold">{idx + 1}</span> / {questions.length}</div>
+            <div className="text-sm text-muted-foreground">
+              <span className="text-foreground font-semibold">{idx + 1}</span> / {questions.length}
+            </div>
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${timeLeft <= 5 ? "border-destructive text-destructive" : "border-border text-foreground"}`}>
               <Clock className="h-4 w-4" />
-              <span className="font-mono font-semibold tabular-nums" data-testid="timer">{formatTime(timeLeft)}</span>
+              <span className="font-mono font-semibold tabular-nums" data-testid="timer">
+                {formatTime(timeLeft)}
+              </span>
             </div>
           </div>
         </div>
@@ -215,19 +226,24 @@ function Section1Inner() {
       <main className="container py-12 max-w-3xl">
         <Card className="animate-fade-in">
           <CardContent className="p-8">
-            <div className="text-xs uppercase tracking-widest text-primary">Question {idx + 1}</div>
+            <div className="text-xs uppercase tracking-widest text-primary">
+              Question {idx + 1}
+            </div>
             <p className="font-display text-xl sm:text-2xl mt-4 leading-relaxed" data-testid="question-text">
               {q.question}
             </p>
             <form
               className="mt-8 flex flex-col sm:flex-row gap-3"
-              onSubmit={(e) => { e.preventDefault(); submit(false); }}
+              onSubmit={(e) => { 
+                e.preventDefault(); 
+                submit(false); 
+              }}
             >
               <Input
                 autoFocus
                 value={answer}
-                onChange={(e) => setAnswer(e.target.value.replace(/s+/g, ""))}
-                placeholder="Type one word..."
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Type your answer..."
                 className="flex-1"
                 data-testid="answer-input"
               />
@@ -236,7 +252,8 @@ function Section1Inner() {
               </Button>
             </form>
             <p className="text-xs text-muted-foreground mt-4 flex items-center gap-2">
-              <AlertCircle className="h-3 w-3" /> Single-word answer · Synonyms in context accepted · Auto-submits in {timeLeft}s · No going back
+              <AlertCircle className="h-3 w-3" /> 
+              Single-word answer · Synonyms in context accepted · Auto-submits in {timeLeft}s · No going back
             </p>
           </CardContent>
         </Card>

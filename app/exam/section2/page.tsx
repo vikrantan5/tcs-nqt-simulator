@@ -41,8 +41,15 @@ function Section2Inner() {
   const [phase, setPhase] = useState<Phase>("read");
   const [timeLeft, setTimeLeft] = useState(READ_SECONDS);
   const [recall, setRecall] = useState("");
+  const recallRef = useRef("");
+  const phaseRef = useRef<Phase>("read");
   const tickRef = useRef<NodeJS.Timeout | null>(null);
   const submittingRef = useRef(false);
+
+  // Keep refs in sync with latest state so auto-submit on timer-expiry
+  // captures the user's most recent typing (avoids stale closures).
+  useEffect(() => { recallRef.current = recall; }, [recall]);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +128,8 @@ function Section2Inner() {
   }, [idx, phase, loading, passages.length]);
 
   async function handlePhaseEnd() {
-    if (phase === "read") {
+    // Read latest phase from ref to avoid stale closures inside setInterval
+    if (phaseRef.current === "read") {
       setPhase("write");
       return;
     }
@@ -157,13 +165,16 @@ function Section2Inner() {
 
     const p = passages[idx];
     if (!p) { submittingRef.current = false; return; }
+    // Use latest typed value via ref to prevent saving stale empty string
+    // when this function is invoked from a setInterval auto-submit.
+    const currentRecall = recallRef.current;
     setLoading(true);
     let evaluation: any = { score: 0 };
     try {
       const r = await fetch("/api/evaluate/passage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passage: p.passage, key_points: p.key_points, recall }),
+        body: JSON.stringify({ passage: p.passage, key_points: p.key_points, recall: currentRecall }),
       });
       const j = await r.json();
       evaluation = j.evaluation || { score: 0 };
@@ -174,12 +185,13 @@ function Section2Inner() {
     const newAnswer = {
         passage_id: p.id,
       passage_index: idx,
-      recall,
+      recall: currentRecall,
       score: evaluation.score || 0,
       evaluation,
     };
     addPassageAnswer(newAnswer);
     setRecall("");
+    recallRef.current = "";
 
     if (idx + 1 >= passages.length) {
       if (isSolo) {
