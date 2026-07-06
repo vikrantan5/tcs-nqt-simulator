@@ -39,6 +39,8 @@ function Section3Inner() {
   const [timeLeft, setTimeLeft] = useState(EMAIL_SECONDS);
   const tickRef = useRef<NodeJS.Timeout | null>(null);
 
+
+  
   useEffect(() => {
     let cancelled = false;
     async function init() {
